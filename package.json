@@ -1,0 +1,14 @@
+{
+  "name": "sentencepathslite-deploy-wrapper",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Static deploy wrapper for SentencePathsLite build output (serves ./site, builds to ./dist).",
+  "scripts": {
+    "dev": "node scripts/serve.js",
+    "build": "node scripts/build.js",
+    "preview": "node scripts/serve.js --dist"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
