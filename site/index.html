@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Sentence Paths</title>
+
+    <!--
+      Patch: hide/remove any visible "Review" UI affordances and any instructional text
+      that mentions review.
+
+      We only modify the built output (this zip is a deploy artifact). Underlying app
+      behavior stays the same; we simply remove "Review" from what users can see.
+    -->
+            <style>
+      [data-sp-hide-review="1"] { display: none !important; }
+    </style>
+    <script>
+      (() => {
+        // Hide/remove visible Review UI + review-only help text,
+        // without affecting Read (linear) behavior.
+        const HIDE_ATTR = 'data-sp-hide-review';
+        const EXACT_REVIEW = /^review$/i;
+        const REVIEWISH = /\breview\b/i;
+        const HELP_PHRASES = [
+          /\breview them\b/i,
+          /spaced\s+repetition/i,
+          /\breview mode\b/i,
+          /toggle\s+read\s*\/\s*review/i,
+          /\buse\b.*\bread\b.*\breview\b/i,
+        ];
+
+        const CLICKABLE_SEL =
+          'a,button,input[type="button"],input[type="submit"],input[type="reset"],option,[role="tab"],[role="button"],[role="menuitem"]';
+
+        function hide(el) {
+          if (!el || el.nodeType !== 1) return;
+          if (el.getAttribute(HIDE_ATTR) === '1') return;
+          el.setAttribute(HIDE_ATTR, '1');
+        }
+
+        function attrText(el) {
+          if (!el || el.nodeType !== 1) return '';
+          const get = (k) => (el.getAttribute ? (el.getAttribute(k) || '') : '');
+          return `${get('aria-label')} ${get('title')} ${get('href')} ${get('value')}`.trim();
+        }
+
+        function isReviewControl(el) {
+          const t = (el.textContent || '').trim();
+          const a = attrText(el);
+          if (EXACT_REVIEW.test(t)) return true;
+          if (REVIEWISH.test(a) && /review/i.test(a)) return true;
+          if (t.length <= 32 && REVIEWISH.test(t) && !/\bread\b/i.test(t)) return true;
+          return false;
+        }
+
+        function isReviewHelpText(el) {
+          if (!el || el.nodeType !== 1) return false;
+          const tag = el.tagName;
+          const t = (el.textContent || '').trim();
+          if (!t) return false;
+
+          // Only hide low-risk, small help-text elements (avoid wiping layout containers).
+          const safeTags = new Set(['P', 'LI', 'SMALL', 'EM', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+          if (!safeTags.has(tag)) return false;
+          if (!REVIEWISH.test(t) && !/spaced\s+repetition/i.test(t)) return false;
+          if (t.length > 260) return false;
+
+          return HELP_PHRASES.some((re) => re.test(t));
+        }
+
+        function scan(root) {
+          if (!root) return;
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+          let node = walker.currentNode;
+          while (node) {
+            try {
+              if (node.matches && node.matches(CLICKABLE_SEL) && isReviewControl(node)) {
+                hide(node);
+              } else if (isReviewHelpText(node)) {
+                hide(node);
+              }
+            } catch (_) {}
+            node = walker.nextNode();
+          }
+        }
+
+        function init() {
+          scan(document.body);
+          const obs = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+              for (const n of m.addedNodes || []) {
+                if (n && n.nodeType === 1) scan(n);
+              }
+            }
+          });
+          obs.observe(document.body, { childList: true, subtree: true });
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init, { once: true });
+        } else {
+          init();
+        }
+      })();
+    </script>
+    <script>
+      // Font Scale Sync - syncs localStorage fontScale to CSS variable
+      (function() {
+        function updateFontScale() {
+          const fontScale = localStorage.getItem('sentencepaths_fontScale');
+          if (fontScale) {
+            const scale = parseFloat(fontScale);
+            document.documentElement.style.setProperty('--sp-font-scale', scale);
+            document.documentElement.setAttribute('data-font-scale', scale.toFixed(1));
+          }
+        }
+        
+        updateFontScale();
+        
+        window.addEventListener('storage', function(e) {
+          if (e.key === 'sentencepaths_fontScale') {
+            updateFontScale();
+          }
+        });
+        
+        // Poll for changes (backup for same-tab updates)
+        setInterval(updateFontScale, 500);
+      })();
+    </script>
+    <script>
+      // AUTOPLAY FIX: Properly wait for TTS to complete in "audio" mode
+      (function() {
+        // Track TTS state
+        window.__ttsState = {
+          isSpeaking: false,
+          lastUtterance: null,
+          onEndCallbacks: []
+        };
+        
+        // Patch SpeechSynthesis to track state
+        if ('speechSynthesis' in window) {
+          const originalSpeak = window.speechSynthesis.speak;
+          
+          window.speechSynthesis.speak = function(utterance) {
+            window.__ttsState.isSpeaking = true;
+            window.__ttsState.lastUtterance = utterance;
+            
+            // Add end handler
+            const originalOnEnd = utterance.onend;
+            utterance.onend = function(event) {
+              window.__ttsState.isSpeaking = false;
+              
+              // Call original handler
+              if (originalOnEnd) {
+                originalOnEnd.call(utterance, event);
+              }
+              
+              // Call all waiting callbacks
+              const callbacks = window.__ttsState.onEndCallbacks.slice();
+              window.__ttsState.onEndCallbacks = [];
+              callbacks.forEach(cb => cb());
+            };
+            
+            // Add error handler
+            const originalOnError = utterance.onerror;
+            utterance.onerror = function(event) {
+              window.__ttsState.isSpeaking = false;
+              
+              if (originalOnError) {
+                originalOnError.call(utterance, event);
+              }
+              
+              // Call callbacks even on error
+              const callbacks = window.__ttsState.onEndCallbacks.slice();
+              window.__ttsState.onEndCallbacks = [];
+              callbacks.forEach(cb => cb());
+            };
+            
+            // Call original speak
+            return originalSpeak.call(this, utterance);
+          };
+        }
+        
+        // Helper: Wait for TTS to complete
+        window.waitForTTS = function(timeoutMs) {
+          timeoutMs = timeoutMs || 30000; // Default 30 second timeout
+          
+          return new Promise((resolve) => {
+            // If not speaking, resolve immediately
+            if (!window.__ttsState.isSpeaking) {
+              resolve();
+              return;
+            }
+            
+            // Set timeout fallback
+            const timeoutId = setTimeout(() => {
+              // Remove from callbacks if still there
+              const idx = window.__ttsState.onEndCallbacks.indexOf(callback);
+              if (idx > -1) {
+                window.__ttsState.onEndCallbacks.splice(idx, 1);
+              }
+              resolve();
+            }, timeoutMs);
+            
+            // Add callback
+            const callback = () => {
+              clearTimeout(timeoutId);
+              resolve();
+            };
+            
+            window.__ttsState.onEndCallbacks.push(callback);
+          });
+        };
+        
+        // Enhanced auto-play logic
+        window.__autoPlayActive = false;
+        window.__autoPlayCounter = 0;
+        
+        // Inject improved auto-play behavior
+        function enhanceAutoPlay() {
+          // Look for the practice dock buttons
+          const observer = new MutationObserver(() => {
+            // Find Resume/Pause button
+            const buttons = document.querySelectorAll('.btn.big.primary');
+            buttons.forEach(btn => {
+              const text = btn.textContent;
+              if (text === 'Resume' || text === 'Pause') {
+                // This is the auto-play control button
+                if (!btn.__autoPlayPatched) {
+                  btn.__autoPlayPatched = true;
+                  
+                  const originalClick = btn.onclick;
+                  btn.addEventListener('click', function(e) {
+                    // Toggle auto-play state
+                    window.__autoPlayActive = text === 'Resume';
+                    
+                    if (window.__autoPlayActive) {
+                      window.__autoPlayCounter++;
+                      triggerAutoPlayChain();
+                    }
+                  }, true);
+                }
+              }
+            });
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        }
+        
+        // Auto-play chain with proper TTS waiting
+        async function triggerAutoPlayChain() {
+          const myCounter = window.__autoPlayCounter;
+          
+          // Small delay before starting
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Check if still active
+          if (!window.__autoPlayActive || myCounter !== window.__autoPlayCounter) {
+            return;
+          }
+          
+          // Check mode
+          const autoAfter = localStorage.getItem('sentencepaths_autoAfter') || 'audio';
+          const autoDelay = parseFloat(localStorage.getItem('sentencepaths_autoDelaySec') || '0.5');
+          
+          // Wait for TTS based on mode
+          if (autoAfter === 'audio') {
+            // Wait for TTS to complete (with 30s timeout)
+            await window.waitForTTS(30000);
+            
+            // Add small buffer
+            await new Promise(resolve => setTimeout(resolve, 300));
+          } else {
+            // Delay mode - wait for TTS + delay
+            await window.waitForTTS(30000);
+            await new Promise(resolve => setTimeout(resolve, autoDelay * 1000));
+          }
+          
+          // Check if still active
+          if (!window.__autoPlayActive || myCounter !== window.__autoPlayCounter) {
+            return;
+          }
+          
+          // Try to advance to next
+          const nextBtn = Array.from(document.querySelectorAll('.btn.big'))
+            .find(btn => btn.textContent === 'Next');
+          
+          if (nextBtn) {
+            nextBtn.click();
+            
+            // Wait a bit for new sentence to load
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Continue chain
+            if (window.__autoPlayActive && myCounter === window.__autoPlayCounter) {
+              triggerAutoPlayChain();
+            }
+          }
+        }
+        
+        // Initialize
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', enhanceAutoPlay);
+        } else {
+          enhanceAutoPlay();
+        }
+        
+        // Listen for space key to detect pause
+        window.addEventListener('keydown', (e) => {
+          if (e.code === 'Space' && !e.repeat) {
+            const activeElement = document.activeElement;
+            const isInput = activeElement && (
+              activeElement.tagName === 'INPUT' ||
+              activeElement.tagName === 'TEXTAREA' ||
+              activeElement.tagName === 'SELECT' ||
+              activeElement.isContentEditable
+            );
+            
+            if (!isInput) {
+              // Space was pressed in practice mode
+              setTimeout(() => {
+                // Check button state
+                const pauseBtn = Array.from(document.querySelectorAll('.btn.big.primary'))
+                  .find(btn => btn.textContent === 'Pause');
+                
+                window.__autoPlayActive = !!pauseBtn;
+                
+                if (window.__autoPlayActive) {
+                  window.__autoPlayCounter++;
+                  triggerAutoPlayChain();
+                }
+              }, 100);
+            }
+          }
+        });
+      })();
+    </script>
+    <script>
+      // FONT SCALE SLIDER INJECTION: Add missing font scale UI to Settings
+      (function() {
+        function injectFontScaleUI() {
+          // Wait for Settings modal to be in DOM
+          const checkInterval = setInterval(() => {
+            // Look for Settings modal body
+            const modals = document.querySelectorAll('.modalCard');
+            
+            for (const modal of modals) {
+              const title = modal.querySelector('.modalHeader');
+              if (!title || !title.textContent.includes('Settings')) continue;
+              
+              const modalBody = modal.querySelector('.modalBody');
+              if (!modalBody) continue;
+              
+              // Check if we already injected
+              if (modalBody.querySelector('#fontScaleSlider')) continue;
+              
+              // Find the first panel (Settings panel)
+              const firstPanel = modalBody.querySelector('.panel');
+              if (!firstPanel) continue;
+              
+              // Create font scale controls
+              const fontScaleRow = document.createElement('div');
+              fontScaleRow.className = 'row';
+              fontScaleRow.style.marginTop = '10px';
+              fontScaleRow.style.alignItems = 'center';
+              
+              const label = document.createElement('span');
+              label.className = 'pill';
+              label.textContent = 'Font scale';
+              
+              const slider = document.createElement('input');
+              slider.id = 'fontScaleSlider';
+              slider.type = 'range';
+              slider.min = '0.8';
+              slider.max = '1.4';
+              slider.step = '0.1';
+              slider.value = localStorage.getItem('sentencepaths_fontScale') || '1.0';
+              slider.style.flex = '1';
+              slider.style.minWidth = '160px';
+              
+              const valueDisplay = document.createElement('span');
+              valueDisplay.className = 'pill';
+              valueDisplay.textContent = slider.value + 'x';
+              valueDisplay.style.minWidth = '60px';
+              valueDisplay.style.textAlign = 'center';
+              
+              // Update on change
+              slider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                valueDisplay.textContent = value.toFixed(1) + 'x';
+                localStorage.setItem('sentencepaths_fontScale', value);
+                document.documentElement.style.setProperty('--sp-font-scale', value);
+                document.documentElement.setAttribute('data-font-scale', value.toFixed(1));
+              });
+              
+              fontScaleRow.appendChild(label);
+              fontScaleRow.appendChild(slider);
+              fontScaleRow.appendChild(valueDisplay);
+              
+              // Insert after the first row (after Theme/Direction)
+              const firstRow = firstPanel.querySelector('.row');
+              if (firstRow && firstRow.nextSibling) {
+                firstPanel.insertBefore(fontScaleRow, firstRow.nextSibling);
+              } else {
+                firstPanel.appendChild(fontScaleRow);
+              }
+            }
+          }, 500); // Check every 500ms
+          
+          // Stop checking after 30 seconds
+          setTimeout(() => clearInterval(checkInterval), 30000);
+        }
+        
+        // Start injecting when DOM is ready
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', injectFontScaleUI);
+        } else {
+          injectFontScaleUI();
+        }
+        
+        // Also inject when Settings button is clicked
+        document.addEventListener('click', (e) => {
+          const target = e.target;
+          if (target && target.textContent === '⚙') {
+            setTimeout(injectFontScaleUI, 100);
+          }
+        });
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-5e1a8343.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/dexie-d9f8aec0.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-7461c230.js">
+    <link rel="modulepreload" crossorigin href="/assets/react-bc301c2f.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-c412e8f2.css">
+  
+    <link rel="stylesheet" crossorigin href="/assets/premium.css"><link rel="manifest" href="/manifest.webmanifest"></head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
