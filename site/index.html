@@ -506,6 +506,353 @@
         });
       })();
     </script>
+    <script>
+      // TTS LANGUAGE TESTER: Allows users to test TTS for any language with proper sample phrases
+      (function() {
+        // Sample phrases for common languages (in their native script)
+        const TTS_SAMPLE_PHRASES = {
+          // Romance languages
+          'fr': { phrase: 'Bonjour, comment allez-vous?', name: 'French' },
+          'es': { phrase: '¡Hola! ¿Cómo estás?', name: 'Spanish' },
+          'it': { phrase: 'Ciao, come stai?', name: 'Italian' },
+          'pt': { phrase: 'Olá, como você está?', name: 'Portuguese' },
+          'ro': { phrase: 'Bună ziua, ce mai faci?', name: 'Romanian' },
+          'ca': { phrase: 'Hola, com estàs?', name: 'Catalan' },
+
+          // Germanic languages
+          'de': { phrase: 'Guten Tag, wie geht es Ihnen?', name: 'German' },
+          'nl': { phrase: 'Hallo, hoe gaat het met u?', name: 'Dutch' },
+          'sv': { phrase: 'Hej, hur mår du?', name: 'Swedish' },
+          'no': { phrase: 'Hei, hvordan har du det?', name: 'Norwegian' },
+          'da': { phrase: 'Hej, hvordan har du det?', name: 'Danish' },
+          'is': { phrase: 'Halló, hvernig hefur þú það?', name: 'Icelandic' },
+
+          // Slavic languages
+          'ru': { phrase: 'Здравствуйте, как дела?', name: 'Russian' },
+          'pl': { phrase: 'Cześć, jak się masz?', name: 'Polish' },
+          'cs': { phrase: 'Ahoj, jak se máš?', name: 'Czech' },
+          'sk': { phrase: 'Ahoj, ako sa máš?', name: 'Slovak' },
+          'uk': { phrase: 'Привіт, як справи?', name: 'Ukrainian' },
+          'bg': { phrase: 'Здравейте, как сте?', name: 'Bulgarian' },
+          'hr': { phrase: 'Bok, kako si?', name: 'Croatian' },
+          'sr': { phrase: 'Здраво, како си?', name: 'Serbian' },
+
+          // Asian languages
+          'zh': { phrase: '你好，你好吗？', name: 'Chinese' },
+          'ja': { phrase: 'こんにちは、お元気ですか？', name: 'Japanese' },
+          'ko': { phrase: '안녕하세요, 어떻게 지내세요?', name: 'Korean' },
+          'vi': { phrase: 'Xin chào, bạn khỏe không?', name: 'Vietnamese' },
+          'th': { phrase: 'สวัสดี คุณสบายดีไหม?', name: 'Thai' },
+          'id': { phrase: 'Halo, apa kabar?', name: 'Indonesian' },
+          'ms': { phrase: 'Hai, apa khabar?', name: 'Malay' },
+          'tl': { phrase: 'Kumusta, kamusta ka?', name: 'Tagalog/Filipino' },
+          'hi': { phrase: 'नमस्ते, आप कैसे हैं?', name: 'Hindi' },
+          'bn': { phrase: 'হ্যালো, আপনি কেমন আছেন?', name: 'Bengali' },
+          'ta': { phrase: 'வணக்கம், நீங்கள் எப்படி இருக்கிறீர்கள்?', name: 'Tamil' },
+          'te': { phrase: 'హలో, మీరు ఎలా ఉన్నారు?', name: 'Telugu' },
+          'mr': { phrase: 'नमस्कार, तुम्ही कसे आहात?', name: 'Marathi' },
+          'gu': { phrase: 'નમસ્તે, તમે કેમ છો?', name: 'Gujarati' },
+          'kn': { phrase: 'ನಮಸ್ಕಾರ, ನೀವು ಹೇಗಿದ್ದೀರಿ?', name: 'Kannada' },
+          'ml': { phrase: 'ഹലോ, സുഖമാണോ?', name: 'Malayalam' },
+          'pa': { phrase: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਤੁਸੀਂ ਕਿਵੇਂ ਹੋ?', name: 'Punjabi' },
+          'ur': { phrase: 'السلام علیکم، آپ کیسے ہیں؟', name: 'Urdu' },
+
+          // Middle Eastern languages
+          'ar': { phrase: 'مرحبا، كيف حالك؟', name: 'Arabic' },
+          'he': { phrase: 'שלום, מה שלומך?', name: 'Hebrew' },
+          'fa': { phrase: 'سلام، حال شما چطور است؟', name: 'Persian/Farsi' },
+          'tr': { phrase: 'Merhaba, nasılsınız?', name: 'Turkish' },
+
+          // Other European languages
+          'el': { phrase: 'Γεια σου, πώς είσαι;', name: 'Greek' },
+          'hu': { phrase: 'Szia, hogy vagy?', name: 'Hungarian' },
+          'fi': { phrase: 'Hei, mitä kuuluu?', name: 'Finnish' },
+          'et': { phrase: 'Tere, kuidas läheb?', name: 'Estonian' },
+          'lv': { phrase: 'Sveiki, kā jums klājas?', name: 'Latvian' },
+          'lt': { phrase: 'Sveiki, kaip sekasi?', name: 'Lithuanian' },
+
+          // African languages
+          'sw': { phrase: 'Habari, hujambo?', name: 'Swahili' },
+          'af': { phrase: 'Hallo, hoe gaan dit?', name: 'Afrikaans' },
+          'zu': { phrase: 'Sawubona, unjani?', name: 'Zulu' },
+
+          // Default fallback
+          'en': { phrase: 'Hello, how are you?', name: 'English' }
+        };
+
+        // Get sample phrase for a language code
+        window.getTTSSamplePhrase = function(langCode) {
+          if (!langCode) return TTS_SAMPLE_PHRASES['en'];
+
+          // Normalize: extract base language code (e.g., "fr" from "fr-FR")
+          const baseLang = langCode.toLowerCase().split('-')[0].split('_')[0];
+
+          return TTS_SAMPLE_PHRASES[baseLang] || {
+            phrase: 'Hello, how are you?',
+            name: 'Unknown (' + langCode + ')'
+          };
+        };
+
+        // Test TTS for a specific language
+        window.testTTSLanguage = function(langCode, options) {
+          options = options || {};
+
+          if (!('speechSynthesis' in window)) {
+            console.error('TTS Test: Speech synthesis not supported');
+            return Promise.reject(new Error('Speech synthesis not supported'));
+          }
+
+          const sample = window.getTTSSamplePhrase(langCode);
+          const text = options.customText || sample.phrase;
+
+          return new Promise((resolve, reject) => {
+            // Get available voices
+            const voices = window.speechSynthesis.getVoices();
+            const baseLang = (langCode || 'en').toLowerCase().split('-')[0];
+
+            // Find matching voices for this language
+            const matchingVoices = voices.filter(v =>
+              v.lang.toLowerCase().startsWith(baseLang)
+            );
+
+            // Select voice: use preferred URI if provided, otherwise first match
+            let selectedVoice = null;
+            if (options.voiceURI) {
+              selectedVoice = voices.find(v => v.voiceURI === options.voiceURI);
+            }
+            if (!selectedVoice && matchingVoices.length > 0) {
+              selectedVoice = matchingVoices[0];
+            }
+
+            // Create utterance
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = langCode || 'en-US';
+            utterance.rate = options.rate || 1.0;
+            utterance.pitch = options.pitch || 1.0;
+
+            if (selectedVoice) {
+              utterance.voice = selectedVoice;
+            }
+
+            // Log test info
+            const testInfo = {
+              language: sample.name,
+              langCode: langCode,
+              phrase: text,
+              selectedVoice: selectedVoice ? {
+                name: selectedVoice.name,
+                lang: selectedVoice.lang,
+                voiceURI: selectedVoice.voiceURI,
+                localService: selectedVoice.localService
+              } : null,
+              availableVoices: matchingVoices.map(v => ({
+                name: v.name,
+                lang: v.lang,
+                voiceURI: v.voiceURI
+              }))
+            };
+
+            console.log('TTS Test:', testInfo);
+
+            utterance.onend = function() {
+              resolve(testInfo);
+            };
+
+            utterance.onerror = function(event) {
+              testInfo.error = event.error;
+              reject(testInfo);
+            };
+
+            // Stop any current speech and speak
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
+          });
+        };
+
+        // Get all available voices for a language
+        window.getTTSVoicesForLanguage = function(langCode) {
+          if (!('speechSynthesis' in window)) {
+            return [];
+          }
+
+          const voices = window.speechSynthesis.getVoices();
+          const baseLang = (langCode || 'en').toLowerCase().split('-')[0];
+
+          return voices.filter(v =>
+            v.lang.toLowerCase().startsWith(baseLang)
+          ).map(v => ({
+            name: v.name,
+            lang: v.lang,
+            voiceURI: v.voiceURI,
+            default: v.default,
+            localService: v.localService
+          }));
+        };
+
+        // List all supported sample languages
+        window.listTTSSampleLanguages = function() {
+          return Object.keys(TTS_SAMPLE_PHRASES).map(code => ({
+            code: code,
+            name: TTS_SAMPLE_PHRASES[code].name,
+            samplePhrase: TTS_SAMPLE_PHRASES[code].phrase
+          }));
+        };
+
+        // Inject TTS Test button into Settings UI
+        function injectTTSTestUI() {
+          const checkInterval = setInterval(() => {
+            const modals = document.querySelectorAll('.modalCard');
+
+            for (const modal of modals) {
+              const title = modal.querySelector('.modalHeader');
+              if (!title || !title.textContent.includes('Settings')) continue;
+
+              const modalBody = modal.querySelector('.modalBody');
+              if (!modalBody) continue;
+
+              // Check if we already injected
+              if (modalBody.querySelector('#ttsTestBtn')) continue;
+
+              // Find the voice selector row
+              const rows = modalBody.querySelectorAll('.row');
+              let voiceRow = null;
+
+              for (const row of rows) {
+                const pills = row.querySelectorAll('.pill');
+                for (const pill of pills) {
+                  if (pill.textContent.toLowerCase() === 'voice') {
+                    voiceRow = row;
+                    break;
+                  }
+                }
+                if (voiceRow) break;
+              }
+
+              if (!voiceRow) continue;
+
+              // Check if test button already exists in voice row
+              if (voiceRow.querySelector('#ttsTestBtn')) continue;
+
+              // Create test button
+              const testBtn = document.createElement('button');
+              testBtn.id = 'ttsTestBtn';
+              testBtn.className = 'btn';
+              testBtn.textContent = 'Test';
+              testBtn.title = 'Test TTS with native language sample phrase';
+              testBtn.style.marginLeft = '8px';
+              testBtn.style.padding = '4px 12px';
+              testBtn.style.fontSize = '14px';
+
+              testBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                // Get current language tag from dataset
+                const langTag = localStorage.getItem('sentencepaths_currentLangTag') || 'en-US';
+
+                // Try to get from the currently active dataset
+                // First check if there's a voice selector we can read from
+                const voiceSelect = voiceRow.querySelector('select');
+                const selectedVoiceURI = voiceSelect ? voiceSelect.value : null;
+
+                // Get rate and pitch from sliders
+                let rate = 1.0;
+                let pitch = 1.0;
+
+                for (const row of rows) {
+                  const pillText = (row.querySelector('.pill')?.textContent || '').toLowerCase();
+                  const slider = row.querySelector('input[type="range"]');
+                  if (slider) {
+                    if (pillText === 'rate') rate = parseFloat(slider.value) || 1.0;
+                    if (pillText === 'pitch') pitch = parseFloat(slider.value) || 1.0;
+                  }
+                }
+
+                // Show testing state
+                const originalText = testBtn.textContent;
+                testBtn.textContent = '...';
+                testBtn.disabled = true;
+
+                // Run test
+                window.testTTSLanguage(langTag, {
+                  voiceURI: selectedVoiceURI,
+                  rate: rate,
+                  pitch: pitch
+                }).then(info => {
+                  testBtn.textContent = '✓';
+                  setTimeout(() => {
+                    testBtn.textContent = originalText;
+                    testBtn.disabled = false;
+                  }, 1500);
+                }).catch(err => {
+                  testBtn.textContent = '✗';
+                  console.error('TTS Test failed:', err);
+                  setTimeout(() => {
+                    testBtn.textContent = originalText;
+                    testBtn.disabled = false;
+                  }, 1500);
+                });
+              });
+
+              voiceRow.appendChild(testBtn);
+            }
+          }, 500);
+
+          // Stop checking after 30 seconds
+          setTimeout(() => clearInterval(checkInterval), 30000);
+        }
+
+        // Track current language for TTS testing
+        function trackCurrentLanguage() {
+          // Watch for dataset changes and store current language tag
+          const observer = new MutationObserver(() => {
+            // Try to detect current language from UI
+            const langBadges = document.querySelectorAll('.badge, .tag, [data-lang]');
+            // Also check for language indicators in the practice view
+            const practiceInfo = document.querySelector('.practiceInfo, .sentenceInfo');
+            if (practiceInfo) {
+              const text = practiceInfo.textContent || '';
+              // Look for language codes like "el-GR", "fr-FR", etc.
+              const match = text.match(/([a-z]{2}-[A-Z]{2})/);
+              if (match) {
+                localStorage.setItem('sentencepaths_currentLangTag', match[1]);
+              }
+            }
+          });
+
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+          });
+        }
+
+        // Initialize
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', () => {
+            injectTTSTestUI();
+            trackCurrentLanguage();
+          });
+        } else {
+          injectTTSTestUI();
+          trackCurrentLanguage();
+        }
+
+        // Re-inject when Settings is opened
+        document.addEventListener('click', (e) => {
+          const target = e.target;
+          if (target && target.textContent === '⚙') {
+            setTimeout(injectTTSTestUI, 100);
+          }
+        });
+
+        // Log available functions for console testing
+        console.log('TTS Language Tester loaded. Available functions:');
+        console.log('  - testTTSLanguage("fr-FR") - Test TTS for French');
+        console.log('  - getTTSSamplePhrase("ja") - Get sample phrase for Japanese');
+        console.log('  - getTTSVoicesForLanguage("de") - List German voices');
+        console.log('  - listTTSSampleLanguages() - List all sample languages');
+      })();
+    </script>
     <script type="module" crossorigin src="/assets/index-5e1a8343.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/dexie-d9f8aec0.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-7461c230.js">
